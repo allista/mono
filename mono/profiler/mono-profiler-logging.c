@@ -5260,6 +5260,8 @@ process_user_commands (void) {
 			LOG_USER_THREAD ("process_user_commands: received no character.");
 			result = TRUE;
 			loop = FALSE;
+		} else if (errno == EINTR) {
+			// A.G.: Ignore interrupts by signals
 		} else {
 			LOG_USER_THREAD ("process_user_commands: received error.");
 			result = FALSE;
@@ -5303,11 +5305,15 @@ user_thread (gpointer nothing) {
 	
 	LOG_USER_THREAD ("user_thread: listening...\n");
 	listen (server_socket, 1);
-	command_socket = accept (server_socket, NULL, NULL);
-	if (command_socket < 0) {
-		LOG_USER_THREAD ("user_thread: error accepting socket.");
-		close (server_socket);
-		return 0;
+
+	// A.G.: Ignore interrupts by signals
+	while(command_socket < 0) {
+		command_socket = accept (server_socket, NULL, NULL);
+		if (command_socket < 0 && errno != EINTR) {
+			LOG_USER_THREAD ("user_thread: error accepting socket.");
+			close (server_socket);
+			return 0;
+		}
 	}
 	
 	LOG_USER_THREAD ("user_thread: processing user commands...");

@@ -5710,24 +5710,26 @@ data_writer_thread (gpointer nothing) {
 	for (;;) {
 		ProfilerStatisticalData *statistical_data;
 		gboolean done;
+		MonoDomain *root_domain = NULL;
+		MonoThread *this_thread = NULL;
 		
 		LOG_WRITER_THREAD ("data_writer_thread: going to sleep");
 		WRITER_EVENT_WAIT ();
 		LOG_WRITER_THREAD ("data_writer_thread: just woke up");
 		
-		if (profiler->heap_shot_was_requested) {
-			MonoDomain * root_domain = mono_get_root_domain ();
-			
-			if (root_domain != NULL) {
-				MonoThread *this_thread;
-				LOG_WRITER_THREAD ("data_writer_thread: attaching thread");
+		// A.G.: Must attach thread because some deeply nested functions are allocating objects
+		LOG_WRITER_THREAD ("data_writer_thread: attaching thread");
+		if (!profiler->terminate_writer_thread) {
+			root_domain = mono_get_root_domain ();
+			if (root_domain != NULL)
 				this_thread = mono_thread_attach (root_domain);
+		}
+
+		if (profiler->heap_shot_was_requested) {
+			if (root_domain != NULL) {
 			LOG_WRITER_THREAD ("data_writer_thread: starting requested collection");
 			mono_gc_collect (mono_gc_max_generation ());
 			LOG_WRITER_THREAD ("data_writer_thread: requested collection done");
-				LOG_WRITER_THREAD ("data_writer_thread: detaching thread");
-				mono_thread_detach (this_thread);
-				this_thread = NULL;
 				LOG_WRITER_THREAD ("data_writer_thread: collection sequence completed");
 			} else {
 				LOG_WRITER_THREAD ("data_writer_thread: cannot get root domain, collection sequence skipped");
@@ -5770,6 +5772,11 @@ data_writer_thread (gpointer nothing) {
 			LOG_WRITER_THREAD ("data_writer_thread: flushed buffers and released lock");
 		}
 		
+		// A.G.: Detach thread back
+		LOG_WRITER_THREAD ("data_writer_thread: detaching thread");
+		if (this_thread)
+			mono_thread_detach (this_thread);
+
 		if (profiler->terminate_writer_thread) {
 		LOG_WRITER_THREAD ("data_writer_thread: exiting thread");
 			CLEANUP_WRITER_THREAD ();

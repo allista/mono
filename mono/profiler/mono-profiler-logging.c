@@ -2158,6 +2158,10 @@ profiler_code_buffer_new_callback  (MonoProfiler *prof, gpointer address, int si
 	ProfilerCodeChunks *chunks = & (prof->code_chunks);
 	ProfilerCodeChunk *chunk;
 	
+	// A.G.: work around a bug in mono_codegen() in ../mini/mini.c
+	// https://github.com/mono/mono/commit/273562edd68c3a2763ad710337a0342c15282a05
+	address = ((guint8*)address) - size;
+
 	if (prof->code_chunks.chunks != NULL) {
 		LOCK_PROFILER ();
 		chunk = profiler_code_chunk_find (chunks, address);

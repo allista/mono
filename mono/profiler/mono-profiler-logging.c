@@ -93,14 +93,16 @@ typedef enum {
 	MONO_PROFILER_EVENT_METHOD_FREED = 1,
 	MONO_PROFILER_EVENT_METHOD_CALL = 2,
 	MONO_PROFILER_EVENT_METHOD_ALLOCATION_CALLER = 3,
-	MONO_PROFILER_EVENT_METHOD_ALLOCATION_JIT_TIME_CALLER = 4
+	MONO_PROFILER_EVENT_METHOD_ALLOCATION_JIT_TIME_CALLER = 4,
+	MONO_PROFILER_EVENT_METHOD_MAPPED = 15
 } MonoProfilerMethodEvents;
 typedef enum {
 	MONO_PROFILER_EVENT_CLASS_LOAD = 0,
 	MONO_PROFILER_EVENT_CLASS_UNLOAD = 1,
 	MONO_PROFILER_EVENT_CLASS_EXCEPTION = 2,
 	MONO_PROFILER_EVENT_CLASS_MONITOR = 3,
-	MONO_PROFILER_EVENT_CLASS_ALLOCATION = 4
+	MONO_PROFILER_EVENT_CLASS_ALLOCATION = 4,
+	MONO_PROFILER_EVENT_CLASS_MAPPED = 15
 } MonoProfilerClassEvents;
 typedef enum {
 	MONO_PROFILER_EVENT_RESULT_SUCCESS = 0,
@@ -2155,6 +2157,9 @@ profiler_code_chunk_destroy_callback  (MonoProfiler *prof, gpointer address) {
 }
 
 static void
+method_mapped (MonoProfiler *prof, MonoMethod *method);
+
+static void
 profiler_code_buffer_new_callback  (MonoProfiler *prof, gpointer address, int size, MonoProfilerCodeBufferType type, void *data) {
 	ProfilerCodeChunks *chunks = & (prof->code_chunks);
 	ProfilerCodeChunk *chunk;
@@ -2162,6 +2167,10 @@ profiler_code_buffer_new_callback  (MonoProfiler *prof, gpointer address, int si
 	// A.G.: work around a bug in mono_codegen() in ../mini/mini.c
 	// https://github.com/mono/mono/commit/273562edd68c3a2763ad710337a0342c15282a05
 	address = ((guint8*)address) - size;
+
+	// A.G.: log mapping of methods, because generics aren't properly tracked by jit cb
+	if (type == MONO_PROFILER_CODE_BUFFER_METHOD)
+		method_mapped (prof, (MonoMethod*)data);
 
 	if (prof->code_chunks.chunks != NULL) {
 		LOCK_PROFILER ();
@@ -2770,6 +2779,10 @@ write_event (ProfilerEventData *event, ProfilerPerThreadData *data) {
 		MethodIdMappingElement *element = method_id_mapping_element_get (event->data.address);
 		g_assert (element != NULL);
 		event_data = element->id;
+
+		// A.G.: hide the hacky mapping events
+		if (event->code == MONO_PROFILER_EVENT_METHOD_MAPPED)
+			return next;
 		
 		if (event->code == MONO_PROFILER_EVENT_METHOD_CALL) {
 			if (event->kind == MONO_PROFILER_EVENT_KIND_START) {
@@ -2784,6 +2797,10 @@ write_event (ProfilerEventData *event, ProfilerPerThreadData *data) {
 		ClassIdMappingElement *element = class_id_mapping_element_get (event->data.address);
 		g_assert (element != NULL);
 		event_data = element->id;
+
+		// A.G.: hide the hacky mapping events
+		if (event->code == MONO_PROFILER_EVENT_CLASS_MAPPED)
+			return next;
 		
 		if (event->code == MONO_PROFILER_EVENT_CLASS_ALLOCATION) {
 			if ((! profiler->action_flags.save_allocation_caller) || (! (next->code == MONO_PROFILER_EVENT_METHOD_ALLOCATION_JIT_TIME_CALLER))) {
@@ -4418,6 +4435,19 @@ method_end_jit (MonoProfiler *profiler, MonoMethod *method, int result) {
 	GET_NEXT_FREE_EVENT (data, event);
 	STORE_EVENT_ITEM_COUNTER (event, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_JIT | RESULT_TO_EVENT_CODE (result), MONO_PROFILER_EVENT_KIND_END);
 	thread_stack_pop (&(data->stack));
+	COMMIT_RESERVED_EVENTS (data);
+}
+
+static void
+method_mapped (MonoProfiler *profiler, MonoMethod *method) {
+	ProfilerPerThreadData *data;
+	ProfilerEventData *event;
+	MonoClass *klass;
+	GET_PROFILER_THREAD_DATA (data);
+	RESERVE_EVENTS (data, event, 2);
+	klass = mono_method_get_class(method);
+	STORE_EVENT_ITEM_COUNTER (event, profiler, klass, MONO_PROFILER_EVENT_DATA_TYPE_CLASS, MONO_PROFILER_EVENT_CLASS_MAPPED, 0);
+	STORE_EVENT_ITEM_COUNTER (event+1, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_MAPPED, 0);
 	COMMIT_RESERVED_EVENTS (data);
 }
 

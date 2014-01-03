@@ -5252,6 +5252,23 @@ mini_free_jit_domain_info (MonoDomain *domain)
 	domain->runtime_info = NULL;
 }
 
+static void
+check_environment_options (void)
+{
+	char *args;
+
+	/* Check additional environment variables for things
+	 * normally done through command-line options. */
+	if ((args = getenv ("MONO_PROFILE")) != NULL)
+		mono_profiler_load (args);
+
+	if ((args = getenv ("MONO_DEBUGGER_AGENT")) != NULL) {
+		debug_options.mdb_optimizations = TRUE;
+		mono_debugger_agent_parse_options (args);
+		mono_debug_init (MONO_DEBUG_FORMAT_MONO);
+	}
+}
+
 MonoDomain *
 mini_init (const char *filename, const char *runtime_version)
 {
@@ -5268,8 +5285,11 @@ mini_init (const char *filename, const char *runtime_version)
 #endif
 
 	/* Happens when using the embedding interface */
-	if (!default_opt_set)
+	if (!default_opt_set) {
 		default_opt = mono_parse_default_optimizations (NULL);
+		check_environment_options();
+		default_opt_set = TRUE;
+	}
 
 	InitializeCriticalSection (&jit_mutex);
 
@@ -5809,6 +5829,8 @@ mono_set_defaults (int verbose_level, guint32 opts)
 {
 	mini_verbose = verbose_level;
 	default_opt = opts;
+	if (!default_opt_set)
+		check_environment_options();
 	default_opt_set = TRUE;
 }
 

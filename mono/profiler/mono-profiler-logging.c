@@ -3897,10 +3897,14 @@ write_statistical_data_block (ProfilerStatisticalData *data) {
 		ProfilerStatisticalHit hit = data->hits [base_index];
 		int callers_count;
 		
-		regions_refreshed = write_statistical_hit ((current_thread != NULL) ? hit.domain : NULL, hit.address, regions_refreshed);
-		base_index ++;
+		// A.G.: Don't write the topmost item separately
+		if (call_chain_depth == 0) {
+			regions_refreshed = write_statistical_hit ((current_thread != NULL) ? hit.domain : NULL, hit.address, regions_refreshed);
+			continue;
+		}
 		
-		for (callers_count = 0; callers_count < call_chain_depth; callers_count ++) {
+		// A.G.: Loop over the whole call trace
+		for (callers_count = 0; callers_count < call_chain_depth+1; callers_count ++) {
 			hit = data->hits [base_index + callers_count];
 			if (hit.address == NULL) {
 				break;
@@ -3908,7 +3912,8 @@ write_statistical_data_block (ProfilerStatisticalData *data) {
 		}
 		
 		if (callers_count > 0) {
-			write_uint32 ((callers_count << 3) | MONO_PROFILER_STATISTICAL_CODE_CALL_CHAIN);
+			// A.G.: Write a decremented count so that it is correctly interpreted
+			write_uint32 (((callers_count-1) << 3) | MONO_PROFILER_STATISTICAL_CODE_CALL_CHAIN);
 			
 			for (callers_count = 0; callers_count < call_chain_depth; callers_count ++) {
 				hit = data->hits [base_index + callers_count];

@@ -648,6 +648,7 @@ typedef struct _ProfilerExecutableFileSectionRegion {
 
 typedef struct _ProfilerExecutableFile {
 	guint32 reference_count;
+	char *file_name; /* used as key in the hash */
 	
 	/* Used for mmap and munmap */
 	int fd;
@@ -3198,7 +3199,11 @@ executable_file_open (ProfilerExecutableMemoryRegionData *region) {
 			
 			file = g_new0 (ProfilerExecutableFile, 1);
 			region->file = file;
-			g_hash_table_insert (files->table, region->file_name, file);
+			/* A.G.: Allocate a new copy of filename for use as key,
+			   so that it survives exactly as long as the file object
+			   even if the regions come and go. */
+			file->file_name = g_strdup (region->file_name);
+			g_hash_table_insert (files->table, file->file_name, file);
 			file->reference_count ++;
 			file->next_new_file = files->new_files;
 			files->new_files = file;
@@ -3304,6 +3309,10 @@ executable_file_free (ProfilerExecutableFile* file) {
 	if (file->section_regions != NULL) {
 		g_free (file->section_regions);
 		file->section_regions = NULL;
+	}
+	if (file->file_name != NULL) {
+		g_free (file->file_name);
+		file->file_name = NULL;
 	}
 	g_free (file);
 }

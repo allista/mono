@@ -50,6 +50,7 @@ system("rm -f $bintarget/mono");
 system("rm -f $libtarget/libmono.so");
 system("rm -f $libtarget/libMonoPosixHelper.so");
 system("rm -f $libtarget/libmono-static.a");
+system("rm -f $libtarget/libmono-profiler-logging.so");
 
 if (not $skipbuild)
 {
@@ -138,10 +139,14 @@ system("cp", "$root/mono/mini/.libs/libmono.a","$libtarget/libmono-static.a") eq
 print "Copying libMonoPosixHelper.so\n";
 system("cp", "$root/support/.libs/libMonoPosixHelper.so","$libtarget/libMonoPosixHelper.so") eq 0 or die ("failed copying libMonoPosixHelper.so");
 
+print "Copying libmono-profiler-logging.so\n";
+system("cp", "$root/mono/profiler/.libs/libmono-profiler-logging.so.0.0.0","$libtarget/libmono-profiler-logging.so") eq 0 or die ("failed copying libmono-profiler-logging.so");
+
 if ($ENV{"UNITY_THISISABUILDMACHINE"})
 {
 	system("strip $libtarget/libmono.so") eq 0 or die("failed to strip libmono (shared)");
 	system("strip $libtarget/libMonoPosixHelper.so") eq 0 or die("failed to strip libMonoPosixHelper (shared)");
+	system("strip $libtarget/libmono-profiler-logging.so") eq 0 or die("failed to strip libmono-profiler-logging (shared)");
 	system("echo \"mono-runtime-$platform = $ENV{'BUILD_VCS_NUMBER'}\" > $root/builds/versions.txt");
 }
 

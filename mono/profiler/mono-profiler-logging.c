@@ -4423,6 +4423,7 @@ method_start_jit (MonoProfiler *profiler, MonoMethod *method) {
 	ProfilerEventData *event;
 	GET_PROFILER_THREAD_DATA (data);
 	GET_NEXT_FREE_EVENT (data, event);
+	mono_method_signature(method); /* A.G.: Cache the signature to avoid deadlock */
 	thread_stack_push_jitted_safely (&(data->stack), method, TRUE);
 	STORE_EVENT_ITEM_COUNTER (event, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_JIT, MONO_PROFILER_EVENT_KIND_START);
 	COMMIT_RESERVED_EVENTS (data);
@@ -4433,6 +4434,7 @@ method_end_jit (MonoProfiler *profiler, MonoMethod *method, int result) {
 	ProfilerEventData *event;
 	GET_PROFILER_THREAD_DATA (data);
 	GET_NEXT_FREE_EVENT (data, event);
+	mono_method_signature(method); /* A.G.: Cache the signature to avoid deadlock */
 	STORE_EVENT_ITEM_COUNTER (event, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_JIT | RESULT_TO_EVENT_CODE (result), MONO_PROFILER_EVENT_KIND_END);
 	thread_stack_pop (&(data->stack));
 	COMMIT_RESERVED_EVENTS (data);
@@ -4445,6 +4447,7 @@ method_mapped (MonoProfiler *profiler, MonoMethod *method) {
 	MonoClass *klass;
 	GET_PROFILER_THREAD_DATA (data);
 	RESERVE_EVENTS (data, event, 2);
+	mono_method_signature(method); /* A.G.: Cache the signature to avoid deadlock */
 	klass = mono_method_get_class(method);
 	STORE_EVENT_ITEM_COUNTER (event, profiler, klass, MONO_PROFILER_EVENT_DATA_TYPE_CLASS, MONO_PROFILER_EVENT_CLASS_MAPPED, 0);
 	STORE_EVENT_ITEM_COUNTER (event+1, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_MAPPED, 0);
@@ -4481,6 +4484,7 @@ method_enter (MonoProfiler *profiler, MonoMethod *method) {
 	if (profiler->action_flags.track_calls) {
 		ProfilerEventData *event;
 		GET_NEXT_FREE_EVENT (data, event);
+		mono_method_signature(method); /* A.G.: Cache the signature to avoid deadlock */
 		STORE_EVENT_ITEM_COUNTER (event, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_CALL, MONO_PROFILER_EVENT_KIND_START);
 		COMMIT_RESERVED_EVENTS (data);
 	}
@@ -4497,6 +4501,7 @@ method_leave (MonoProfiler *profiler, MonoMethod *method) {
 	if (profiler->action_flags.track_calls) {
 		ProfilerEventData *event;
 		GET_NEXT_FREE_EVENT (data, event);
+		mono_method_signature(method); /* A.G.: Cache the signature to avoid deadlock */
 		STORE_EVENT_ITEM_COUNTER (event, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_CALL, MONO_PROFILER_EVENT_KIND_END);
 		COMMIT_RESERVED_EVENTS (data);
 	}
@@ -4511,6 +4516,7 @@ method_free (MonoProfiler *profiler, MonoMethod *method) {
 	ProfilerEventData *event;
 	GET_PROFILER_THREAD_DATA (data);
 	GET_NEXT_FREE_EVENT (data, event);
+	mono_method_signature(method); /* A.G.: Cache the signature to avoid deadlock */
 	STORE_EVENT_ITEM_COUNTER (event, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_FREED, 0);
 	COMMIT_RESERVED_EVENTS (data);
 }
@@ -4542,10 +4548,12 @@ save_stack_delta (MonoProfiler *profiler, ProfilerPerThreadData *data, ProfilerE
 	STORE_EVENT_NUMBER_VALUE (events, profiler, data->stack.last_saved_top, MONO_PROFILER_EVENT_DATA_TYPE_OTHER, MONO_PROFILER_EVENT_STACK_SECTION, 0, unsaved_frames);
 	events++;
 	for (i = 0; i < unsaved_frames; i++) {
+		MonoMethod *method = thread_stack_index_from_top (&(data->stack), i);
+		mono_method_signature(method); /* A.G.: Cache the signature to avoid deadlock */
 		if (! thread_stack_index_from_top_is_jitted (&(data->stack), i)) {
-			STORE_EVENT_ITEM_VALUE (events, profiler, thread_stack_index_from_top (&(data->stack), i), MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_ALLOCATION_CALLER, 0, 0);
+			STORE_EVENT_ITEM_VALUE (events, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_ALLOCATION_CALLER, 0, 0);
 		} else {
-			STORE_EVENT_ITEM_VALUE (events, profiler, thread_stack_index_from_top (&(data->stack), i), MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_ALLOCATION_JIT_TIME_CALLER, 0, 0);
+			STORE_EVENT_ITEM_VALUE (events, profiler, method, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_ALLOCATION_JIT_TIME_CALLER, 0, 0);
 		}
 		events ++;
 	}
@@ -4599,6 +4607,7 @@ object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
 			caller_is_jitted = thread_stack_index_from_top_is_jitted (&(data->stack), index);
 			index ++;
 		}
+		mono_method_signature(caller); /* A.G.: Cache the signature to avoid deadlock */
 		if (! caller_is_jitted) {
 			STORE_EVENT_ITEM_VALUE (events, profiler, caller, MONO_PROFILER_EVENT_DATA_TYPE_METHOD, MONO_PROFILER_EVENT_METHOD_ALLOCATION_CALLER, 0, 0);
 		} else {

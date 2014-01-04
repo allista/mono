@@ -37,7 +37,7 @@ void mono_profiler_allocation      (MonoObject *obj, MonoClass *klass) MONO_INTE
 void mono_profiler_monitor_event   (MonoObject *obj, MonoProfilerMonitorEvent event) MONO_INTERNAL;
 void mono_profiler_stat_hit        (guchar *ip, void *context) MONO_INTERNAL;
 void mono_profiler_stat_call_chain (int call_chain_depth, guchar **ips, void *context) MONO_INTERNAL;
-#define MONO_PROFILER_MAX_STAT_CALL_CHAIN_DEPTH 16
+#define MONO_PROFILER_MAX_STAT_CALL_CHAIN_DEPTH 128
 int  mono_profiler_stat_get_call_chain_depth (void) MONO_INTERNAL;
 MonoProfilerCallChainStrategy mono_profiler_stat_get_call_chain_strategy (void) MONO_INTERNAL;
 void mono_profiler_thread_start    (gsize tid) MONO_INTERNAL;

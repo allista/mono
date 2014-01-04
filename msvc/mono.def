@@ -80,6 +80,23 @@ mono_type_get_name_full
 ;A.G.: exports for profiler
 mono_100ns_ticks
 unity_fopen
+g_malloc
+g_malloc0
+g_strdup
+g_strdup_printf
+g_strsplit
+g_log
+g_get_prgname
+g_hash_table_new
+g_hash_table_new_full
+g_hash_table_destroy
+g_hash_table_lookup
+g_hash_table_insert_replace
+g_hash_table_remove
+g_str_hash
+g_direct_hash
+g_str_equal
+g_utf16_to_utf8
 
 ;Original Mono Exports
 mono_add_internal_call

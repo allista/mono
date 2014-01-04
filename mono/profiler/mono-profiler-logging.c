@@ -15,18 +15,42 @@
 #include <mono/metadata/threads.h>
 #include <mono/metadata/debug-helpers.h>
 #include <mono/metadata/mono-gc.h>
+#ifndef PLATFORM_WIN32
 #include <mono/io-layer/atomic.h>
+#else
+#include <mono/utils/mono-time.h>
+#endif
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <glib.h>
 
+#ifndef PLATFORM_WIN32
 #include <dlfcn.h>
 
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#else
+#undef fopen
+#ifdef _MSC_VER
+#include <winsock2.h>
+#endif
+#define HOST_WIN32
+#endif
+
+#ifdef HOST_WIN32
+#include <ws2tcpip.h>
+#ifdef __GNUC__
+/* cygwin's headers do not seem to define these */
+void WSAAPI freeaddrinfo (struct addrinfo*);
+int WSAAPI getaddrinfo (const char*,const char*,const struct addrinfo*,
+                        struct addrinfo**);
+int WSAAPI getnameinfo(const struct sockaddr*,socklen_t,char*,DWORD,
+                       char*,DWORD,int);
+#endif
+#endif
 
 #define HAS_OPROFILE 0
 
@@ -127,11 +151,17 @@ typedef enum {
 	MONO_PROFILER_EVENT_KIND_END = 1
 } MonoProfilerEventKind;
 
+#ifndef PLATFORM_WIN32
 #define MONO_PROFILER_GET_CURRENT_TIME(t) {\
 	struct timeval current_time;\
 	gettimeofday (&current_time, NULL);\
 	(t) = (((guint64)current_time.tv_sec) * 1000000) + current_time.tv_usec;\
 } while (0)
+#else
+#define MONO_PROFILER_GET_CURRENT_TIME(t) {\
+	(t) = ((guint64)mono_100ns_ticks()) / 10; \
+} while (0)
+#endif
 
 static gboolean use_fast_timer = FALSE;
 
@@ -355,7 +385,7 @@ typedef struct _ProfilerCodeChunk {
 
 typedef struct _ProfilerCodeChunks {
 	int capacity;
-	int number_of_chunks;;
+	int number_of_chunks;
 	ProfilerCodeChunk *chunks;
 } ProfilerCodeChunks;
 
@@ -771,7 +801,8 @@ make_pthread_profiler_key (void) {
 #define UNLOCK_PROFILER() LeaveCriticalSection (&(profiler->mutex))
 
 #define THREAD_TYPE HANDLE
-#define CREATE_WRITER_THREAD(f) CreateThread (NULL, (1*1024*1024), (f), NULL, 0, NULL);
+#define CREATE_WRITER_THREAD(f) profiler->data_writer_thread = CreateThread (NULL, (1*1024*1024), (f), NULL, 0, NULL);
+#define CREATE_USER_THREAD(f) profiler->user_thread = CreateThread (NULL, (1*1024*1024), (f), NULL, 0, NULL);
 #define EXIT_THREAD() ExitThread (0);
 #define WAIT_WRITER_THREAD() do {\
 	if (CHECK_WRITER_THREAD ()) {\
@@ -789,13 +820,12 @@ static guint32 profiler_thread_id = -1;
 #endif
 
 #define EVENT_TYPE HANDLE
-#define WRITER_EVENT_INIT() (void) do {\
+#define WRITER_EVENT_INIT() do {\
 	profiler->enable_data_writer_event = CreateEvent (NULL, FALSE, FALSE, NULL);\
 	profiler->wake_data_writer_event = CreateEvent (NULL, FALSE, FALSE, NULL);\
 	profiler->done_data_writer_event = CreateEvent (NULL, FALSE, FALSE, NULL);\
 } while (0)
-#define WRITER_EVENT_DESTROY() CloseHandle (profiler->statistical_data_writer_event)
-#define WRITER_EVENT_INIT() (void) do {\
+#define WRITER_EVENT_DESTROY() do {\
 	CloseHandle (profiler->enable_data_writer_event);\
 	CloseHandle (profiler->wake_data_writer_event);\
 	CloseHandle (profiler->done_data_writer_event);\
@@ -3139,6 +3169,7 @@ executable_file_add_region_reference (ProfilerExecutableFile *file, ProfilerExec
 	}
 }
 
+#ifndef PLATFORM_WIN32
 static gboolean check_elf_header (ElfHeader* header) {
 	guint16 test = 0x0102;
 	
@@ -3194,6 +3225,7 @@ static gboolean check_elf_file (int fd) {
 	free (header);
 	return result;
 }
+#endif
 
 static ProfilerExecutableFile*
 executable_file_open (ProfilerExecutableMemoryRegionData *region) {
@@ -3204,6 +3236,7 @@ executable_file_open (ProfilerExecutableMemoryRegionData *region) {
 		file = (ProfilerExecutableFile*) g_hash_table_lookup (files->table, region->file_name);
 		
 		if (file == NULL) {
+#ifndef PLATFORM_WIN32
 			struct stat stat_buffer;
 			int symtab_index = 0;
 			int strtab_index = 0;
@@ -3213,6 +3246,7 @@ executable_file_open (ProfilerExecutableMemoryRegionData *region) {
 			guint8 *section_headers;
 			int section_index;
 			int strings_index;
+#endif
 			
 			file = g_new0 (ProfilerExecutableFile, 1);
 			region->file = file;
@@ -3225,6 +3259,7 @@ executable_file_open (ProfilerExecutableMemoryRegionData *region) {
 			file->next_new_file = files->new_files;
 			files->new_files = file;
 			
+#ifndef PLATFORM_WIN32
 			file->fd = open (region->file_name, O_RDONLY);
 			if (file->fd == -1) {
 				//g_warning ("Cannot open file '%s': '%s'", region->file_name, strerror (errno));
@@ -3298,6 +3333,9 @@ executable_file_open (ProfilerExecutableMemoryRegionData *region) {
 			}
 			
 			file->section_regions = g_new0 (ProfilerExecutableFileSectionRegion, file->header->e_shnum);
+#else
+			return file;
+#endif
 		} else {
 			region->file = file;
 			file->reference_count ++;
@@ -3313,6 +3351,7 @@ executable_file_open (ProfilerExecutableMemoryRegionData *region) {
 
 static void
 executable_file_free (ProfilerExecutableFile* file) {
+#ifndef PLATFORM_WIN32
 	if (file->fd != -1) {
 		if (close (file->fd) != 0) {
 			g_warning ("Cannot close file: '%s'", strerror (errno));
@@ -3323,6 +3362,7 @@ executable_file_free (ProfilerExecutableFile* file) {
 			}
 		}
 	}
+#endif
 	if (file->section_regions != NULL) {
 		g_free (file->section_regions);
 		file->section_regions = NULL;
@@ -3502,6 +3542,7 @@ executable_memory_region_find_symbol (ProfilerExecutableMemoryRegionData *region
 	}
 }
 
+#ifndef PLATFORM_WIN32
 //FIXME: make also Win32 and BSD variants
 #define MAPS_BUFFER_SIZE 4096
 #define MAPS_FILENAME_SIZE 2048
@@ -3696,18 +3737,23 @@ parse_map_line (ProfilerExecutableMemoryRegions *regions, int fd, char *buffer, 
 		c = *current;
 	}
 }
+#else
+#endif
 
 static gboolean
 scan_process_regions (ProfilerExecutableMemoryRegions *regions) {
+#ifndef PLATFORM_WIN32
 	char *buffer;
 	char *filename;
 	char *current;
 	int fd;
+#endif
 	
 #ifdef PLATFORM_MACOSX
 	return FALSE;
 #endif
 
+#ifndef PLATFORM_WIN32
 	fd = open ("/proc/self/maps", O_RDONLY);
 	if (fd == -1) {
 		return FALSE;
@@ -3725,6 +3771,10 @@ scan_process_regions (ProfilerExecutableMemoryRegions *regions) {
 	free (filename);
 	
 	close (fd);
+#else
+	return FALSE;
+#endif
+
 	return TRUE;
 }
 //End of Linux code
@@ -5308,8 +5358,10 @@ process_user_commands (void) {
 			LOG_USER_THREAD ("process_user_commands: received no character.");
 			result = TRUE;
 			loop = FALSE;
+#ifndef PLATFORM_WIN32
 		} else if (errno == EINTR) {
 			// A.G.: Ignore interrupts by signals
+#endif
 		} else {
 			LOG_USER_THREAD ("process_user_commands: received error.");
 			result = FALSE;
@@ -5321,8 +5373,17 @@ process_user_commands (void) {
 	return result;
 }
 
+#ifndef HOST_WIN32
+#define closesocket(x) close(x)
+#endif
+
+#ifndef PLATFORM_WIN32
 static guint32
 user_thread (gpointer nothing) {
+#else
+static DWORD WINAPI
+user_thread (LPVOID nothing) {
+#endif
 	struct sockaddr_in server_address;
 	
 	server_socket = -1;
@@ -5347,7 +5408,7 @@ user_thread (gpointer nothing) {
 	
 	if (bind (server_socket, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
 		LOG_USER_THREAD ("user_thread: error binding socket.");
-		close (server_socket);
+		closesocket (server_socket);
 		return 0;
 	}
 	
@@ -5357,9 +5418,13 @@ user_thread (gpointer nothing) {
 	// A.G.: Ignore interrupts by signals
 	while(command_socket < 0) {
 		command_socket = accept (server_socket, NULL, NULL);
-		if (command_socket < 0 && errno != EINTR) {
+		if (command_socket < 0) {
+#ifndef PLATFORM_WIN32
+			if (errno == EINTR)
+				continue;
+#endif
 			LOG_USER_THREAD ("user_thread: error accepting socket.");
-			close (server_socket);
+			closesocket (server_socket);
 			return 0;
 		}
 	}
@@ -5368,8 +5433,8 @@ user_thread (gpointer nothing) {
 	process_user_commands ();
 	
 	LOG_USER_THREAD ("user_thread: exiting cleanly.");
-	close (server_socket);
-	close (command_socket);
+	closesocket (server_socket);
+	closesocket (command_socket);
 	return 0;
 }
 
@@ -5759,8 +5824,13 @@ failure_handling:
 	}
 }
 
+#ifndef PLATFORM_WIN32
 static guint32
 data_writer_thread (gpointer nothing) {
+#else
+static DWORD WINAPI
+data_writer_thread (LPVOID nothing) {
+#endif
 	for (;;) {
 		ProfilerStatisticalData *statistical_data;
 		gboolean done;

@@ -1,0 +1,3 @@
+LIBRARY mono-profiler-logging.dll
+EXPORTS
+mono_profiler_startup

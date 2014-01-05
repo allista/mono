@@ -3542,10 +3542,11 @@ executable_memory_region_find_symbol (ProfilerExecutableMemoryRegionData *region
 	}
 }
 
-#ifndef PLATFORM_WIN32
 //FIXME: make also Win32 and BSD variants
 #define MAPS_BUFFER_SIZE 4096
 #define MAPS_FILENAME_SIZE 2048
+
+#ifndef PLATFORM_WIN32
 
 static gboolean
 update_regions_buffer (int fd, char *buffer) {
@@ -3738,6 +3739,63 @@ parse_map_line (ProfilerExecutableMemoryRegions *regions, int fd, char *buffer, 
 	}
 }
 #else
+static void
+scan_windows_mappings (ProfilerExecutableMemoryRegions *regions) {
+	MEMORY_BASIC_INFORMATION MBI;
+	SYSTEM_INFO si;
+	DWORD PageSize;
+	LPCVOID movingStart = 0;
+	SIZE_T start_address, end_address;
+	DWORD is_executable;
+	PVOID last_allocation_base = NULL;
+	HANDLE process = GetCurrentProcess ();
+	ProfilerExecutableMemoryRegionData *last = NULL;
+	char filename[MAPS_FILENAME_SIZE];
+	guint32 offset;
+
+	GetSystemInfo(&si);
+	PageSize = si.dwPageSize;
+
+	while (VirtualQueryEx (process, movingStart, &MBI, sizeof(MBI)) == sizeof(MBI))
+	{
+		start_address = (SIZE_T) MBI.BaseAddress;
+		end_address = start_address + MBI.RegionSize;
+		movingStart = (LPCVOID) (end_address + PageSize - 1);
+
+		if (MBI.State != MEM_COMMIT)
+			continue;
+
+		is_executable = MBI.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY);
+
+		/* Merge areas from the same mapping to hide fragmenting due to Copy On Write */
+		if (regions->regions_count > 0 && last_allocation_base == MBI.AllocationBase)
+		{
+			last = regions->regions [regions->regions_count-1];
+
+			if (last->end == MBI.BaseAddress)
+			{
+				last->end = (gpointer) end_address;
+				continue;
+			}
+		}
+
+		if (!is_executable)
+			continue;
+
+		last_allocation_base = MBI.AllocationBase;
+
+		if (GetModuleBaseNameA (process, (HMODULE)last_allocation_base, filename, MAPS_FILENAME_SIZE)) {
+			offset = (guint32) (start_address - (SIZE_T)last_allocation_base);
+		} else if (GetMappedFileNameA (process, MBI.BaseAddress, filename, MAPS_FILENAME_SIZE)) {
+			offset = (guint32) (start_address - (SIZE_T)last_allocation_base);
+		} else {
+			offset = 0;
+			filename[0] = 0;
+		}
+
+		append_region (regions, (gpointer) start_address, (gpointer) end_address, offset, filename);
+	}
+}
 #endif
 
 static gboolean
@@ -3772,7 +3830,7 @@ scan_process_regions (ProfilerExecutableMemoryRegions *regions) {
 	
 	close (fd);
 #else
-	return FALSE;
+	scan_windows_mappings (regions);
 #endif
 
 	return TRUE;

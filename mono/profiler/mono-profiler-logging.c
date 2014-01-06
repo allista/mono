@@ -4005,7 +4005,7 @@ flush_all_mappings (void);
 
 static void
 write_statistical_data_block (ProfilerStatisticalData *data) {
-	MonoThread *current_thread = mono_thread_current ();
+	MonoThread *current_thread = NULL; // mono_thread_current ();
 	int start_index = data->first_unwritten_index;
 	int end_index = data->next_free_index;
 	gboolean regions_refreshed = FALSE;
@@ -4762,7 +4762,7 @@ monitor_event (MonoProfiler *profiler, MonoObject *obj, MonoProfilerMonitorEvent
 
 static void
 statistical_call_chain (MonoProfiler *profiler, int call_chain_depth, guchar **ips, void *context) {
-	MonoDomain *domain = mono_domain_get ();
+	MonoDomain *domain = NULL; // mono_domain_get ();
 	ProfilerStatisticalData *data;
 	unsigned int index;
 	
@@ -4821,7 +4821,7 @@ statistical_call_chain (MonoProfiler *profiler, int call_chain_depth, guchar **i
 
 static void
 statistical_hit (MonoProfiler *profiler, guchar *ip, void *context) {
-	MonoDomain *domain = mono_domain_get ();
+	MonoDomain *domain = NULL; // mono_domain_get ();
 	ProfilerStatisticalData *data;
 	unsigned int index;
 	

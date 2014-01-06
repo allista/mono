@@ -4049,7 +4049,7 @@ write_statistical_data_block (ProfilerStatisticalData *data) {
 			// A.G.: Write a decremented count so that it is correctly interpreted
 			write_uint32 (((callers_count-1) << 3) | MONO_PROFILER_STATISTICAL_CODE_CALL_CHAIN);
 			
-			for (callers_count = 0; callers_count < call_chain_depth; callers_count ++) {
+			for (callers_count = 0; callers_count < call_chain_depth+1; callers_count ++) {
 				hit = data->hits [base_index + callers_count];
 				if (hit.address != NULL) {
 					regions_refreshed = write_statistical_hit ((current_thread != NULL) ? hit.domain : NULL, hit.address, regions_refreshed);

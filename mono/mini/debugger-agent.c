@@ -1891,7 +1891,7 @@ buffer_add_domainid (Buffer *buf, MonoDomain *domain)
 	buffer_add_ptr_id (buf, domain, ID_DOMAIN, domain);
 }
 
-static void invoke_method (void);
+static gboolean invoke_method (void);
 
 /*
  * SUSPEND/RESUME
@@ -2330,6 +2330,7 @@ suspend_current (void)
 	int err;
 	DebuggerTlsData *tls;
 
+restart_suspend:
 	g_assert (debugger_thread_id != GetCurrentThreadId ());
 
 	if (mono_loader_lock_is_owned_by_self ()) {
@@ -2387,7 +2388,8 @@ suspend_current (void)
 		tls->pending_invoke->has_ctx = TRUE;
 		memcpy (&tls->pending_invoke->ctx, &tls->ctx, sizeof (MonoContext));
 
-		invoke_method ();
+		if (invoke_method ())
+			goto restart_suspend;
 	}
 
 	/* The frame info becomes invalid after a resume */
@@ -5196,7 +5198,7 @@ do_invoke_method (DebuggerTlsData *tls, Buffer *buf, InvokeData *invoke)
  *
  *   Invoke the method given by tls->pending_invoke in the current thread.
  */
-static void
+static gboolean
 invoke_method (void)
 {
 	DebuggerTlsData *tls;
@@ -5278,7 +5280,7 @@ invoke_method (void)
 	g_free (invoke->p);
 	g_free (invoke);
 
-	suspend_current ();
+	return TRUE;
 }
 
 static gboolean

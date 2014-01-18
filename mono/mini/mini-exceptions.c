@@ -1332,8 +1332,6 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 								}
 								g_list_free (trace_ips);
 
-								/* mono_debugger_agent_handle_exception () needs this */
-								MONO_CONTEXT_SET_IP (ctx, ei->handler_start);
 								return TRUE;
 							}
 							if (mono_trace_is_enabled () && mono_trace_eval (ji->method))

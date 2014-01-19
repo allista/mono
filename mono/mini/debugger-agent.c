@@ -1990,6 +1990,8 @@ save_thread_context (MonoContext *ctx)
 /* The number of times the runtime is suspended */
 static gint32 suspend_count;
 
+static gint32 thread_died = 0;
+
 /* Number of threads suspended */
 /* 
  * If this is equal to the size of thread_to_tls, the runtime is considered
@@ -3120,8 +3122,10 @@ process_event (EventKind event, gpointer arg, gint32 il_offset, MonoContext *ctx
 		suspend_policy = SUSPEND_POLICY_NONE;
 	}
 
-	if (event == EVENT_KIND_THREAD_DEATH)
+	if (event == EVENT_KIND_THREAD_DEATH) {
+		thread_died = 1;
 		suspend_policy = SUSPEND_POLICY_NONE;
+	}
 
 	if (mono_runtime_is_shutting_down ())
 		suspend_policy = SUSPEND_POLICY_NONE;
@@ -5488,8 +5492,13 @@ vm_commands (int command, int id, guint8 *p, guint8 *end, Buffer *buf)
 		wait_for_suspend ();
 		break;
 	case CMD_VM_RESUME:
-		if (suspend_count == 0)
+		if (suspend_count == 0) {
+			if (thread_died != 0) {
+				thread_died = 0;
+				break;
+			}
 			return ERR_NOT_SUSPENDED;
+		}
 		resume_vm ();
 		break;
 	case CMD_VM_DISPOSE:

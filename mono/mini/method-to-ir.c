@@ -6435,7 +6435,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 
 				mono_save_token_info (cfg, image, token, cil_method);
 
-				if (!MONO_TYPE_IS_VOID (fsig->ret) && !sym_seq_points) {
+				if (!MONO_TYPE_IS_VOID (fsig->ret)) {
 					/*
 					 * Need to emit an implicit seq point after every non-void call so single stepping through nested calls like
 					 * foo (bar (), baz ())
@@ -6688,7 +6688,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 				ip += 5;
 				ins_flag = 0;
 				if (need_seq_point)
-					emit_seq_point (cfg, method, ip, FALSE);
+					emit_seq_point (cfg, method, ip, TRUE);
 				break;
 			}
 
@@ -6755,7 +6755,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 				ip += 5;
 				ins_flag = 0;
 				if (need_seq_point)
-					emit_seq_point (cfg, method, ip, FALSE);
+					emit_seq_point (cfg, method, ip, TRUE);
 				break;
 			}
 
@@ -6788,7 +6788,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 					inline_costs += costs;
 					ins_flag = 0;
 					if (need_seq_point)
-						emit_seq_point (cfg, method, ip, FALSE);
+						emit_seq_point (cfg, method, ip, TRUE);
 					break;
 				}
 			}
@@ -6906,7 +6906,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 				ip += 5;
 				ins_flag = 0;
 				if (need_seq_point)
-					emit_seq_point (cfg, method, ip, FALSE);
+					emit_seq_point (cfg, method, ip, TRUE);
 				break;
 			}
 	      				
@@ -6948,7 +6948,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 
 				ip += 5;
 				ins_flag = 0;
-				emit_seq_point (cfg, method, ip, FALSE);
+				emit_seq_point (cfg, method, ip, TRUE);
 				break;
 			}
 
@@ -6962,7 +6962,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 				ip += 5;
 				ins_flag = 0;
 				if (need_seq_point)
-					emit_seq_point (cfg, method, ip, FALSE);
+					emit_seq_point (cfg, method, ip, TRUE);
 				break;
 			}
 
@@ -6985,7 +6985,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 			ip += 5;
 			ins_flag = 0;
 			if (need_seq_point)
-				emit_seq_point (cfg, method, ip, FALSE);
+				emit_seq_point (cfg, method, ip, TRUE);
 			break;
 		}
 		case CEE_RET:

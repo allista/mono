@@ -6446,7 +6446,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 					 * int i = foo ();
 					 */
 					/* Special case a few common successor opcodes */
-					if (!(ip + 5 < end && ip [5] == CEE_POP))
+					if (!(ip + 5 < end && (ip [5] == CEE_POP || ip [5] == CEE_NOP)) && !(seq_point_locs && mono_bitset_test_fast (seq_point_locs, ip + 5 - header->code)))
 						need_seq_point = TRUE;
 				}
 

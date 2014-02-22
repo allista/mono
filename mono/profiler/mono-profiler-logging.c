@@ -5340,11 +5340,15 @@ execute_user_command (char *command) {
 	
 	if (strcmp (command, "enable") == 0) {
 		LOG_USER_THREAD ("execute_user_command: enabling profiler");
+		LOCK_PROFILER ();
 		enable_profiler ();
+		UNLOCK_PROFILER ();
 		write_user_response ("DONE\n");
 	} else if (strcmp (command, "disable") == 0) {
 		LOG_USER_THREAD ("execute_user_command: disabling profiler");
+		LOCK_PROFILER ();
 		disable_profiler ();
+		UNLOCK_PROFILER ();
 		write_user_response ("DONE\n");
 	} else if (strcmp (command, "heap-snapshot") == 0) {
 		LOG_USER_THREAD ("execute_user_command: taking heap snapshot");

@@ -589,6 +589,9 @@ static DebuggerProfiler debugger_profiler;
 static SingleStepReq *ss_req = NULL;
 static gpointer ss_invoke_addr = NULL;
 
+/* Treat exceptions unwinding to C code as uncaught */
+static int unwind_to_c_is_uncaught_id = -1;
+
 #ifdef MONO_ARCH_SOFT_DEBUG_SUPPORTED
 /* Number of single stepping operations in progress */
 static int ss_count;
@@ -4620,6 +4623,17 @@ class_is_a_UnityEngine_MonoBehaviour (MonoClass *klass) {
 	return FALSE;
 }
 
+static gboolean
+unwind_to_c_is_uncaught_class (MonoClass *klass) {
+	if ((klass->name_space != NULL) &&
+			(! strcmp (klass->name_space, "System")) &&
+			(klass->name != NULL) &&
+			(! strcmp (klass->name, "StackOverflowException"))) {
+		return TRUE;
+	}
+	return FALSE;
+}
+
 void
 mono_debugger_agent_handle_exception (MonoException *exc, MonoContext *throw_ctx, 
 				      MonoContext *catch_ctx)
@@ -4693,14 +4707,14 @@ mono_debugger_agent_handle_exception (MonoException *exc, MonoContext *throw_ctx
 	ei.exc = (MonoObject*)exc;
 	ei.caught = catch_ctx != NULL;
 	
-	if (catch_ctx != NULL) {
+	if (catch_ctx != NULL && unwind_to_c_is_uncaught_id >= 0) {
 		MonoDomain *d = mono_domain_get ();
 		if (d != NULL) {
 			MonoJitInfo *catch_ji = mini_jit_info_table_find (mono_domain_get (), MONO_CONTEXT_GET_IP (catch_ctx), NULL);
 			if (catch_ji != NULL) {
-				if ((catch_ji->method->wrapper_type == MONO_WRAPPER_RUNTIME_INVOKE) &&
+				if ((catch_ji->method->wrapper_type == MONO_WRAPPER_RUNTIME_INVOKE)/* &&
 						(ji != NULL) &&
-						class_is_a_UnityEngine_MonoBehaviour (ji->method->klass)) {
+						class_is_a_UnityEngine_MonoBehaviour (ji->method->klass)*/) {
 					// Make so that we stop at this exception
 					suspend_policy = SUSPEND_POLICY_ALL;
 					ei.caught = FALSE;
@@ -5141,6 +5155,11 @@ static void
 clear_event_request (int req_id, int etype)
 {
 	int i;
+
+	if (req_id == unwind_to_c_is_uncaught_id) {
+		DEBUG(1, fprintf (log_file, "[dbg] \tUNWIND TO C IS UNCAUGHT OFF.\n"));
+		unwind_to_c_is_uncaught_id = -1;
+	}
 
 	mono_loader_lock ();
 	for (i = 0; i < event_requests->len; ++i) {
@@ -5819,6 +5838,7 @@ event_commands (int command, guint8 *p, guint8 *end, Buffer *buf)
 		MonoThread *step_thread;
 		int size = 0, depth = 0, step_thread_id = 0;
 		MonoDomain *domain;
+		int unwind_to_c_is_uncaught = 0;
 
 		event_kind = decode_byte (p, &p, end);
 		suspend_policy = decode_byte (p, &p, end);
@@ -5864,6 +5884,10 @@ event_commands (int command, guint8 *p, guint8 *end, Buffer *buf)
 				DEBUG(1, fprintf (log_file, "[dbg] \tEXCEPTION_ONLY filter (%s%s%s).\n", exc_class ? exc_class->name : "all", req->modifiers [i].caught ? ", caught" : "", req->modifiers [i].uncaught ? ", uncaught" : ""));
 				if (exc_class) {
 					req->modifiers [i].data.exc_class = exc_class;
+
+					/* Treat exceptions unwinding to C code as uncaught? */
+					if (unwind_to_c_is_uncaught_class(exc_class))
+						unwind_to_c_is_uncaught = 1;
 
 					if (!mono_class_is_assignable_from (mono_defaults.exception_class, exc_class)) {
 						g_free (req);
@@ -5928,6 +5952,11 @@ event_commands (int command, guint8 *p, guint8 *end, Buffer *buf)
 
 		mono_loader_lock ();
 		g_ptr_array_add (event_requests, req);
+
+		if (unwind_to_c_is_uncaught && unwind_to_c_is_uncaught_id < 0) {
+			DEBUG(1, fprintf (log_file, "[dbg] \tUNWIND TO C IS UNCAUGHT ON.\n"));
+			unwind_to_c_is_uncaught_id = req->id;
+		}
 
 		if (agent_config.defer) {
 			/* Transmit cached data to the client on receipt of the event request */

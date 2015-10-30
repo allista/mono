@@ -3,15 +3,15 @@
 # NB! Prereq : ANDROID_NDK_ROOT=/usr/local/android-ndk-xxx or similar
 # Todo: set appropriate ARM flags for hard floats
 
-export ANDROID_PLATFORM=android-5
+export ANDROID_PLATFORM=android-9
 GCC_PREFIX=arm-linux-androideabi-
-GCC_VERSION=4.4.3
+GCC_VERSION=4.8
 OUTDIR=builds/embedruntimes/android
 CWD="$(pwd)"
 PREFIX="$CWD/builds/android"
 BUILDSCRIPTSDIR=external/buildscripts
 
-perl ${BUILDSCRIPTSDIR}/PrepareAndroidSDK.pl -ndk=r8e -env=envsetup.sh && source envsetup.sh
+perl ${BUILDSCRIPTSDIR}/PrepareAndroidSDK.pl -ndk=r9 -env=envsetup.sh && source envsetup.sh
 
 NDK_ROOT=`cd $ANDROID_NDK_ROOT && pwd`
 
@@ -66,6 +66,7 @@ CFLAGS="\
 -fpic -g -funwind-tables \
 -ffunction-sections -fdata-sections"
 CXXFLAGS=$CFLAGS
+CPPFLAGS=$CFLAGS
 LDFLAGS="\
 -Wl,--wrap,sigaction \
 -L${KRAIT_PATCH_PATH}/obj/local/armeabi -lkrait-signal-handler \
@@ -116,7 +117,7 @@ function clean_build
 
 	./configure $CONFIG_OPTS \
 	PATH="$PATH" CC="$CC" CXX="$CXX" CPP="$CPP" CXXCPP="$CXXCPP" \
-	CFLAGS="$CFLAGS $1" CXXFLAGS="$CXXFLAGS $1" LDFLAGS="$LDFLAGS $2" \
+	CFLAGS="$CFLAGS $1" CPPFLAGS="$CPPFLAGS $1" CXXFLAGS="$CXXFLAGS $1" LDFLAGS="$LDFLAGS $2" \
 	LD=$LD AR=$AR AS=$AS RANLIB=$RANLIB STRIP=$STRIP CPATH="$CPATH"
 
 	if [ "$?" -ne "0" ]; then 

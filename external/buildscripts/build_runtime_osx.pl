@@ -36,10 +36,33 @@ if ($ENV{UNITY_THISISABUILDMACHINE})
 		print "\n\nARE YOU SURE YOU DONT WANT TO MAKE A DEBUG BUILD?!?!?!!!!!\n\n\n";
 	}
 	$jobs = "-j$jobs";
-	$ENV{'LIBTOOLIZE'} = 'glibtoolize';
+	my $libtoolize = $ENV{'LIBTOOLIZE'};
+	my $libtool = $ENV{'LIBTOOL'};
+	if($teamcity)
+	{
+		$libtoolize = `which glibtoolize`;
+		chomp($libtoolize);
+		if(!-e $libtoolize)
+		{
+			$libtoolize = `which libtoolize`;
+			chomp($libtoolize);
+		}
+	}
+	if(!-e $libtoolize)
+	{
+		$libtoolize = 'libtoolize';
+	}
+	if(!-e $libtool)
+	{
+		$libtool = $libtoolize;
+		$libtool =~ s/ize$//;
+	}
+	print("Libtool: using $libtoolize and $libtool\n");
+	$ENV{'LIBTOOLIZE'} = $libtoolize;
+	$ENV{'LIBTOOL'} = $libtool;
 }
 
-my @arches = ('x86_64','i386');
+my @arches = ('i386','x86_64');
 if ($iphone_simulator || $minimal) {
 	@arches = ('i386');
 }
@@ -71,6 +94,7 @@ for my $arch (@arches)
 	# Make architecture-specific targets and lipo at the end
 	my $bintarget = "$root/builds/monodistribution/bin-$arch";
 	my $libtarget = "$root/builds/embedruntimes/osx-$arch";
+	my $sdkoptions = '';
 
 	if ($minimal)
 	{
@@ -87,31 +111,25 @@ for my $arch (@arches)
 	{
 		$stackrealign = '-mstackrealign';
 
-		if ($debug)
-		{
-			$ENV{CFLAGS} = "-arch $arch -g -O0 -D_XOPEN_SOURCE=1 -DMONO_DISABLE_SHM=1 -DDISABLE_SHARED_HANDLES=1 $stackrealign";
-			$ENV{CXXFLAGS} = $ENV{CFLAGS};
-			$ENV{LDFLAGS} = "-arch $arch";
-		}
-		else
-		{
-			# Switch -fomit-frame-pointer to -fno-omit-frame-pointer as omitting frame pointer screws up stack traces
-			my $Os = '-Os -fno-omit-frame-pointer';
-			$ENV{CFLAGS} = "-arch $arch -Os -D_XOPEN_SOURCE=1 -DMONO_DISABLE_SHM=1 -DDISABLE_SHARED_HANDLES=1 $stackrealign";  #optimize for size
-			$ENV{CXXFLAGS} = $ENV{CFLAGS};
-			$ENV{LDFLAGS} = "-arch $arch";
-		}
-		my $sdkOptions = "-isysroot $sdkPath -mmacosx-version-min=$macversion";
-
-		if ($iphone_simulator)
-		{
-			$ENV{CFLAGS} = "-D_XOPEN_SOURCE=1 -DTARGET_IPHONE_SIMULATOR -g -O0";
-			$macversion = "10.6";
-			$sdkversion = "10.6";
-		} else {
+		if (!$iphone_simulator) {
+			if ($debug)
+			{
+				$ENV{CFLAGS} = "-arch $arch -g -O0 -D_XOPEN_SOURCE=1 -DMONO_DISABLE_SHM=1 -DDISABLE_SHARED_HANDLES=1 $stackrealign";
+				$ENV{CXXFLAGS} = $ENV{CFLAGS};
+				$ENV{LDFLAGS} = "-arch $arch";
+			}
+			else
+			{
+				# Switch -fomit-frame-pointer to -fno-omit-frame-pointer as omitting frame pointer screws up stack traces
+				my $Os = '-Os -fno-omit-frame-pointer';
+				$ENV{CFLAGS} = "-arch $arch -Os -D_XOPEN_SOURCE=1 -DMONO_DISABLE_SHM=1 -DDISABLE_SHARED_HANDLES=1 $stackrealign";  #optimize for size
+				$ENV{CXXFLAGS} = $ENV{CFLAGS};
+				$ENV{LDFLAGS} = "-arch $arch";
+			}
+			$sdkOptions = "-isysroot $sdkPath -mmacosx-version-min=$macversion $ENV{CFLAGS}";
 			$ENV{'MACSDKOPTIONS'} = $sdkOptions;
 		}
-		
+
 		#this will fail on a fresh working copy, so don't die on it.
 		system("make distclean");
 		#were going to tell autogen to use a specific cache file, that we purposely remove before starting.
@@ -167,7 +185,7 @@ for my $arch (@arches)
 
 	if (!$iphone_simulator)
 	{
-		my $cmdline = "gcc -arch $arch -bundle -Wl,-reexport_library mono/mini/.libs/libmono.a $sdkOptions -all_load -liconv -o $libtarget/MonoBundleBinary";
+		my $cmdline = "gcc -arch $arch $sdkoptions -bundle -Wl,-reexport_library mono/mini/.libs/libmono.a $sdkOptions -all_load -liconv -o $libtarget/MonoBundleBinary";
 		print "About to call this cmdline to make a bundle:\n$cmdline\n";
 		system($cmdline) eq 0 or die("failed to link libmono.a into mono bundle");
 
@@ -209,7 +227,8 @@ if (!$iphone_simulator)
 	for $file ('libmono.0.dylib','libmono.a','libMonoPosixHelper.dylib') {
 		system ('lipo', "$root/builds/embedruntimes/osx-i386/$file", "$root/builds/embedruntimes/osx-x86_64/$file", '-create', '-output', "$root/builds/embedruntimes/osx/$file");
 	}
-	system('cp', "$root/builds/embedruntimes/osx-i386/MonoBundleBinary", "$root/builds/embedruntimes/osx/MonoBundleBinary");
+	system('cp', "$root/builds/embedruntimes/osx-i386/MonoBundleBinary", "$root/builds/embedruntimes/osx/MonoBundleBinary-i386");
+	system('cp', "$root/builds/embedruntimes/osx-x86_64/MonoBundleBinary", "$root/builds/embedruntimes/osx/MonoBundleBinary-x86_64");
 
 	mkpath ("$root/builds/monodistribution/bin");
 	for $file ('mono','pedump') {

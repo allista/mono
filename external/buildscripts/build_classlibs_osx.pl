@@ -69,7 +69,7 @@ if (not $skipbuild)
 	$ENV{LDFLAGS}  = "$ENV{LDFLAGS} -arch i386";
 	if ($^O eq 'darwin')
 	{
-		$ENV{'MACSDKOPTIONS'} = "-mmacosx-version-min=$macversion -isysroot $xcodePath/Developer/SDKs/MacOSX$sdkversion.sdk";
+		$ENV{'MACSDKOPTIONS'} = "$ENV{CFLAGS} -mmacosx-version-min=$macversion -isysroot $xcodePath/Developer/SDKs/MacOSX$sdkversion.sdk";
 	}
 
 	if ($cleanbuild)
@@ -112,7 +112,7 @@ chdir ($root);
 $File::Copy::Recursive::CopyLink = 0;  #make sure we copy files as files and not as symlinks, as TC unfortunately doesn't pick up symlinks.
 
 mkpath("$libmono/2.0");
-dircopy("$monoprefix/lib/mono/2.0","$libmono/2.0");
+system("rsync -aPL $monoprefix/lib/mono/2.0 $libmono/.");
 # system("rm $libmono/2.0/*.mdb");
 mkpath("$libmono/micro");
 system("cp $root/mcs/class/lib/monotouch/mscorlib.dll $libmono/micro") eq 0 or die("Failed to copy micro corlib");

@@ -1047,36 +1047,38 @@ arch_emit_imt_thunk (MonoAotCompile *acfg, int offset, int *tramp_size)
 	/* FIXME: Optimize this, i.e. use binary search etc. */
 	/* Maybe move the body into a separate function (slower, but much smaller) */
 
-	/* R10 is a free register */
+	/* R11 is a free register */
 
 	labels [0] = code;
-	amd64_alu_membase_imm (code, X86_CMP, AMD64_R10, 0, 0);
+	amd64_alu_membase_imm (code, X86_CMP, AMD64_R11, 0, 0);
 	labels [1] = code;
 	amd64_branch8 (code, X86_CC_Z, FALSE, 0);
 
 	/* Check key */
-	amd64_alu_membase_reg (code, X86_CMP, AMD64_R10, 0, MONO_ARCH_IMT_REG);
+	amd64_alu_membase_reg (code, X86_CMP, AMD64_R11, 0, MONO_ARCH_IMT_REG);
 	labels [2] = code;
 	amd64_branch8 (code, X86_CC_Z, FALSE, 0);
 
 	/* Loop footer */
-	amd64_alu_reg_imm (code, X86_ADD, AMD64_R10, 2 * sizeof (gpointer));
+	amd64_alu_reg_imm (code, X86_ADD, AMD64_R11, 2 * sizeof (gpointer));
 	amd64_jump_code (code, labels [0]);
 
 	/* Match */
 	mono_amd64_patch (labels [2], code);
-	amd64_mov_reg_membase (code, AMD64_R10, AMD64_R10, sizeof (gpointer), 8);
-	amd64_jump_membase (code, AMD64_R10, 0);
+	amd64_mov_reg_membase (code, AMD64_R11, AMD64_R11, sizeof (gpointer), 8);
+	amd64_jump_membase (code, AMD64_R11, 0);
 
 	/* No match */
 	/* FIXME: */
 	mono_amd64_patch (labels [1], code);
 	x86_breakpoint (code);
 
-	/* mov <OFFSET>(%rip), %r10 */
+	amd64_mov_reg_membase (code, AMD64_R11, AMD64_RIP, 12345678, 8);
+
+	/* mov <OFFSET>(%rip), %r11 */
 	emit_byte (acfg, '\x4d');
 	emit_byte (acfg, '\x8b');
-	emit_byte (acfg, '\x15');
+	emit_byte (acfg, '\x1d');
 	emit_symbol_diff (acfg, acfg->got_symbol, ".", (offset * sizeof (gpointer)) - 4);
 
 	emit_bytes (acfg, buf, code - buf);
@@ -1581,7 +1583,7 @@ encode_method_ref (MonoAotCompile *acfg, MonoMethod *method, guint8 *buf, guint8
 			break;
 		}
 		case MONO_WRAPPER_MANAGED_TO_MANAGED:
-			if (!strcmp (method->name, "ElementAddr")) {
+			if (strncmp (method->name, "ElementAddr", 11) == 0) {
 				ElementAddrWrapperInfo *info = mono_marshal_wrapper_info_from_wrapper (method);
 
 				g_assert (info);
@@ -3874,7 +3876,7 @@ can_encode_patch (MonoAotCompile *acfg, MonoJumpInfo *patch_info)
 			case MONO_WRAPPER_UNKNOWN:
 				break;
 			case MONO_WRAPPER_MANAGED_TO_MANAGED:
-				if (!strcmp (method->name, "ElementAddr"))
+				if (strncmp (method->name, "ElementAddr", 11) == 0)
 					return TRUE;
 				else
 					return FALSE;
@@ -4098,7 +4100,7 @@ compile_method (MonoAotCompile *acfg, MonoMethod *method)
 					}
 					add_generic_class_with_depth (acfg, m->klass, depth + 5);
 				}
-				if (m->wrapper_type == MONO_WRAPPER_MANAGED_TO_MANAGED && !strcmp (m->name, "ElementAddr"))
+				if (m->wrapper_type == MONO_WRAPPER_MANAGED_TO_MANAGED && strncmp (m->name, "ElementAddr", 11) == 0)
 					add_extra_method_with_depth (acfg, m, depth + 1);
 				break;
 			}

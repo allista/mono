@@ -5,7 +5,7 @@
 
 export ANDROID_PLATFORM=android-9
 GCC_PREFIX=i686-linux-android-
-GCC_VERSION=4.4.3
+GCC_VERSION=4.8
 OUTDIR=builds/embedruntimes/android
 PREFIX=`pwd`/builds/android
 
@@ -63,6 +63,7 @@ CFLAGS="\
 -fpic -g \
 -ffunction-sections -fdata-sections"
 CXXFLAGS=$CFLAGS
+CPPFLAGS=$CFLAGS
 LDFLAGS="\
 -Wl,--no-undefined \
 -ldl -lm -llog -lc -lgcc"
@@ -91,7 +92,7 @@ function clean_build
 
 	./configure $CONFIG_OPTS \
 	PATH="$PATH" CC="$CC" CXX="$CXX" CPP="$CPP" CXXCPP="$CXXCPP" \
-	CFLAGS="$CFLAGS $1" CXXFLAGS="$CXXFLAGS $1" LDFLAGS="$LDFLAGS $2" \
+	CFLAGS="$CFLAGS $1" CXXFLAGS="$CXXFLAGS $1" CPPFLAGS="$CPPFLAGS $1" LDFLAGS="$LDFLAGS $2" \
 	LD=$LD AR=$AR AS=$AS RANLIB=$RANLIB STRIP=$STRIP CPATH="$CPATH"
 
 	if [ "$?" -ne "0" ]; then 
